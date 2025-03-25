@@ -108,15 +108,15 @@ async def send_morning_update():
     except Exception as e:
         print(f"Error sending message - {str(e)}")
 
-# Flask 엔드포인트 (테스트용 KST 0시)
+# Flask 엔드포인트 (테스트용 KST 0시 2분 이후)
 @app.route('/')
 def run_update():
     now = datetime.now(UTC) + timedelta(hours=9)  # KST
     print(f"Request received at {now.hour}:{now.minute} KST")
-    if now.hour == 0:  # KST 0시로 변경
+    if now.hour == 0 and now.minute >= 2:  # KST 0시 2분 이후 실행
         asyncio.run(send_morning_update())
         return "Update sent!"
-    return "Bot is alive, waiting for 0 AM KST"  # 메시지도 0시로 변경
+    return "Bot is alive, waiting for 0:02 AM KST"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
