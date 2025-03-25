@@ -96,27 +96,27 @@ async def send_morning_update():
         try:
             with open(f"{ticker}_chart.png", "rb") as photo:
                 print(f"{ticker}: Sending chart to Telegram")
-                await bot.send_photo(chat_id=CHAT_ID, photo=photo)  # 비동기 호출
+                await bot.send_photo(chat_id=CHAT_ID, photo=photo)
                 print(f"{ticker}: Chart sent successfully")
         except Exception as e:
             print(f"{ticker}: Error sending chart - {str(e)}")
 
     try:
         print("Sending final message to Telegram")
-        await bot.send_message(chat_id=CHAT_ID, text=message)  # 비동기 호출
+        await bot.send_message(chat_id=CHAT_ID, text=message)
         print("Morning update sent successfully!")
     except Exception as e:
         print(f"Error sending message - {str(e)}")
 
-# Flask 엔드포인트
+# Flask 엔드포인트 (테스트용 KST 0시)
 @app.route('/')
 def run_update():
     now = datetime.now(UTC) + timedelta(hours=9)  # KST
     print(f"Request received at {now.hour}:{now.minute} KST")
-    if now.hour == 23:  # 테스트용 23시
-        asyncio.run(send_morning_update())  # 비동기 함수 실행
+    if now.hour == 0:  # KST 0시로 변경
+        asyncio.run(send_morning_update())
         return "Update sent!"
-    return "Bot is alive, waiting for 23 PM KST"
+    return "Bot is alive, waiting for 0 AM KST"  # 메시지도 0시로 변경
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
