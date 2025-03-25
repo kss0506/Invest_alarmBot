@@ -88,7 +88,7 @@ def send_morning_update():
         if ticker in related and "No recent news" in news:
             news = get_yahoo_news(related[ticker])
         message += f"{ticker}: ${price:.2f} ({change:+.2f}%) - {news}\n"
-        
+
         create_chart(ticker)
         try:
             with open(f"{ticker}_chart.png", "rb") as photo:
