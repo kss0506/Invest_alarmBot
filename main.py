@@ -1,13 +1,14 @@
 import telegram
 import yfinance as yf
 import matplotlib
-matplotlib.use('Agg')  # Matplotlib 비GUI 모드 설정
+matplotlib.use('Agg')  # 비GUI 모드
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, UTC
 import requests
 from bs4 import BeautifulSoup
 import os
 from flask import Flask
+import asyncio
 
 app = Flask(__name__)
 
@@ -53,7 +54,7 @@ def create_chart(ticker):
         plt.ylabel("Price (USD)")
         plt.grid(True)
         plt.savefig(f"{ticker}_chart.png")
-        plt.close39
+        plt.close()
         print(f"{ticker}: Chart saved successfully")
     except Exception as e:
         print(f"{ticker}: Error in create_chart - {str(e)}")
@@ -74,8 +75,8 @@ def get_yahoo_news(ticker):
         print(f"{ticker}: Error in get_yahoo_news - {str(e)}")
         return "News unavailable"
 
-# 아침 업데이트
-def send_morning_update():
+# 아침 업데이트 (비동기 처리)
+async def send_morning_update():
     tickers = ["IGV", "SOXL", "IVZ", "BLK", "BRKU", "BTC-USD", "ETH-USD"]
     related = {"IGV": "ADBE", "SOXL": "NVDA"}
     message = "🌞 Good Morning!\n\n"
@@ -95,25 +96,25 @@ def send_morning_update():
         try:
             with open(f"{ticker}_chart.png", "rb") as photo:
                 print(f"{ticker}: Sending chart to Telegram")
-                bot.send_photo(chat_id=CHAT_ID, photo=photo)
+                await bot.send_photo(chat_id=CHAT_ID, photo=photo)  # 비동기 호출
                 print(f"{ticker}: Chart sent successfully")
         except Exception as e:
             print(f"{ticker}: Error sending chart - {str(e)}")
 
     try:
         print("Sending final message to Telegram")
-        bot.send_message(chat_id=CHAT_ID, text=message)
+        await bot.send_message(chat_id=CHAT_ID, text=message)  # 비동기 호출
         print("Morning update sent successfully!")
     except Exception as e:
         print(f"Error sending message - {str(e)}")
 
-# Flask 엔드포인트 (테스트용 KST 23시)
+# Flask 엔드포인트
 @app.route('/')
 def run_update():
-    now = datetime.now(UTC) + timedelta(hours=9)  # KST, Deprecation 수정
+    now = datetime.now(UTC) + timedelta(hours=9)  # KST
     print(f"Request received at {now.hour}:{now.minute} KST")
-    if now.hour == 23:  # KST 23시로 테스트
-        send_morning_update()
+    if now.hour == 23:  # 테스트용 23시
+        asyncio.run(send_morning_update())  # 비동기 함수 실행
         return "Update sent!"
     return "Bot is alive, waiting for 23 PM KST"
 
