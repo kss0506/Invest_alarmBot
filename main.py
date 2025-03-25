@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
 import os
-from flask import Flask  # Flask 추가
+from flask import Flask
 
 app = Flask(__name__)
 
@@ -100,15 +100,15 @@ def send_morning_update():
     bot.send_message(chat_id=CHAT_ID, text=message)
     print("Morning update sent successfully!")
 
-# Flask 엔드포인트 (UptimeRobot 호출용)
+# Flask 엔드포인트 (테스트용 KST 23시)
 @app.route('/')
 def run_update():
     now = datetime.utcnow() + timedelta(hours=9)  # KST
     print(f"Request received at {now.hour}:{now.minute} KST")
-    if now.hour == 7:  # KST 7시에만 실행
+    if now.hour == 23:  # KST 23시로 변경 (현재 시간)
         send_morning_update()
         return "Update sent!"
-    return "Bot is alive, waiting for 7 AM KST"
+    return "Bot is alive, waiting for 23 PM KST"  # 메시지도 테스트용으로 변경
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
