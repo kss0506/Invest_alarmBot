@@ -1,7 +1,9 @@
 import telegram
 import yfinance as yf
+import matplotlib
+matplotlib.use('Agg')  # Matplotlib 비GUI 모드 설정
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -51,8 +53,8 @@ def create_chart(ticker):
         plt.ylabel("Price (USD)")
         plt.grid(True)
         plt.savefig(f"{ticker}_chart.png")
-        plt.close()
-        print(f"{ticker}: Chart saved")
+        plt.close39
+        print(f"{ticker}: Chart saved successfully")
     except Exception as e:
         print(f"{ticker}: Error in create_chart - {str(e)}")
 
@@ -92,23 +94,28 @@ def send_morning_update():
         create_chart(ticker)
         try:
             with open(f"{ticker}_chart.png", "rb") as photo:
+                print(f"{ticker}: Sending chart to Telegram")
                 bot.send_photo(chat_id=CHAT_ID, photo=photo)
-                print(f"{ticker}: Chart sent")
+                print(f"{ticker}: Chart sent successfully")
         except Exception as e:
             print(f"{ticker}: Error sending chart - {str(e)}")
 
-    bot.send_message(chat_id=CHAT_ID, text=message)
-    print("Morning update sent successfully!")
+    try:
+        print("Sending final message to Telegram")
+        bot.send_message(chat_id=CHAT_ID, text=message)
+        print("Morning update sent successfully!")
+    except Exception as e:
+        print(f"Error sending message - {str(e)}")
 
 # Flask 엔드포인트 (테스트용 KST 23시)
 @app.route('/')
 def run_update():
-    now = datetime.utcnow() + timedelta(hours=9)  # KST
+    now = datetime.now(UTC) + timedelta(hours=9)  # KST, Deprecation 수정
     print(f"Request received at {now.hour}:{now.minute} KST")
-    if now.hour == 23:  # KST 23시로 변경 (현재 시간)
+    if now.hour == 23:  # KST 23시로 테스트
         send_morning_update()
         return "Update sent!"
-    return "Bot is alive, waiting for 23 PM KST"  # 메시지도 테스트용으로 변경
+    return "Bot is alive, waiting for 23 PM KST"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
