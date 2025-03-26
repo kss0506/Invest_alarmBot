@@ -10,62 +10,66 @@ import os
 from flask import Flask
 import asyncio
 import time
-import traceback
+import logging
 
-print("\n" * 50)
-print("===== NEW EXECUTION START =====")
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
+                    handlers=[logging.StreamHandler(), logging.FileHandler("debug.log")])
+logger = logging.getLogger(__name__)
+
+logger.info("===== NEW EXECUTION START =====")
 
 app = Flask(__name__)
 
 # 환경 변수 확인
-print("[INIT] Loading environment variables...")
+logger.info("Loading environment variables...")
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 if TOKEN is None or CHAT_ID is None:
-    print("[ERROR] BOT_TOKEN or CHAT_ID is None!")
+    logger.error("BOT_TOKEN or CHAT_ID is None!")
     exit(1)
-print(f"[INIT] TOKEN loaded: {TOKEN[:5]}...")
-print(f"[INIT] CHAT_ID loaded: {CHAT_ID}")
+logger.info(f"TOKEN loaded: {TOKEN[:5]}...")
+logger.info(f"CHAT_ID loaded: {CHAT_ID}")
 
 # 텔레그램 봇 초기화
-print("[INIT] Initializing Telegram bot...")
+logger.info("Initializing Telegram bot...")
 try:
     bot = telegram.Bot(token=TOKEN)
-    print("[INIT] Telegram bot initialized successfully!")
+    logger.info("Telegram bot initialized successfully!")
 except Exception as e:
-    print(f"[ERROR] Initializing bot failed: {str(e)}")
+    logger.error(f"Initializing bot failed: {str(e)}")
     exit(1)
 
-print(f"[INIT] Starting bot... TOKEN: {TOKEN[:5]}..., CHAT_ID: {CHAT_ID}")
+logger.info(f"Starting bot... TOKEN: {TOKEN[:5]}..., CHAT_ID: {CHAT_ID}")
 
 # 마지막 실행 시간 저장
 last_run_time = 0
 
 # 데이터 가져오기
 def get_asset_data(ticker):
-    print(f"[DATA] Fetching data for {ticker}")
+    logger.info(f"Fetching data for {ticker}")
     try:
         asset = yf.Ticker(ticker)
         hist = asset.history(period="1d")
         if hist.empty:
-            print(f"[DATA] {ticker}: No data available")
+            logger.warning(f"{ticker}: No data available")
             return None, None
         price = hist["Close"].iloc[-1]
         change = ((price - hist["Open"].iloc[0]) / hist["Open"].iloc[0]) * 100
-        print(f"[DATA] {ticker}: Price = ${price:.2f}, Change = {change:.2f}%")
+        logger.info(f"{ticker}: Price = ${price:.2f}, Change = {change:.2f}%")
         return price, change
     except Exception as e:
-        print(f"[DATA] {ticker}: Error - {str(e)}")
+        logger.error(f"{ticker}: Error - {str(e)}")
         return None, None
 
 # 차트 생성
 def create_chart(ticker):
-    print(f"[CHART] Creating chart for {ticker}")
+    logger.info(f"Creating chart for {ticker}")
     try:
         asset = yf.Ticker(ticker)
         hist = asset.history(period="6mo")
         if hist.empty:
-            print(f"[CHART] {ticker}: No chart data")
+            logger.warning(f"{ticker}: No chart data")
             return None
         prices = hist["Close"]
         dates = hist.index
@@ -82,45 +86,52 @@ def create_chart(ticker):
         chart_file = f"{ticker}_chart.png"
         plt.savefig(chart_file)
         plt.close()
-        print(f"[CHART] {ticker}: Chart saved successfully")
+        logger.info(f"{ticker}: Chart saved successfully")
         return chart_file
     except Exception as e:
-        print(f"[CHART] {ticker}: Error - {str(e)}")
+        logger.error(f"{ticker}: Error - {str(e)}")
         return None
 
 # Zum 데일리 브리핑 가져오기
 def get_zum_briefing(ticker):
-    print(f"[NEWS] Fetching Zum briefing for {ticker}")
+    logger.info(f"Fetching Zum briefing for {ticker}")
     try:
         if ticker in ["IGV", "SOXL", "IVZ", "BLK", "BRKU"]:
             url = f"https://invest.zum.com/etf/{ticker}/"
+            briefing_class = "styles_briefingInner__WBq3C"  # 주식/ETF용 클래스
         else:
             url = f"https://invest.zum.com/stock/{ticker}/"
+            briefing_class = "styles_briefingInner__1kI5J"  # 가상화폐용 클래스
+
         headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get(url, headers=headers, timeout=5)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        briefing_div = soup.find("div", class_="styles_briefingInner__WBq3C")
-        briefing = briefing_div.text.strip() if briefing_div else "No daily briefing available."
-        print(f"[NEWS] {ticker}: Briefing - {briefing}")
+        briefing_div = soup.find("div", class_=briefing_class)
+        if briefing_div:
+            briefing = briefing_div.text.strip()
+        else:
+            logger.warning(f"{ticker}: No briefing found with class {briefing_class}, HTML sample: {str(soup)[:500]}")
+            briefing = "No daily briefing available."
+        logger.info(f"{ticker}: Briefing - {briefing}")
         return briefing
     except requests.exceptions.RequestException as e:
-        print(f"[NEWS] {ticker}: Network error - {str(e)}")
+        logger.error(f"{ticker}: Network error - {str(e)}")
         return "Briefing unavailable (network issue)"
     except Exception as e:
-        print(f"[NEWS] {ticker}: Error - {str(e)}")
+        logger.error(f"{ticker}: Error - {str(e)}")
         return "Briefing unavailable"
 
 # 아침 업데이트
 async def send_morning_update():
     tickers = ["IGV", "SOXL", "IVZ", "BLK", "BRKU", "BTC-USD", "ETH-USD"]
     message = "🌞 Good Morning!\n\n"
-    print("[UPDATE] Starting morning update...")
+    logger.info("Starting morning update...")
 
     for ticker in tickers:
         price, change = get_asset_data(ticker)
         if price is None or change is None:
-            message += f"{ticker}: Data unavailable\n"
+            message += f"{ticker}: Data unavailable\n\n"
             continue
         briefing = get_zum_briefing(ticker)
         message += f"{ticker}: ${price:.2f} ({change:+.2f}%)\n{briefing}\n\n"
@@ -129,19 +140,19 @@ async def send_morning_update():
         if chart_file:
             try:
                 with open(chart_file, "rb") as photo:
-                    print(f"[TELEGRAM] {ticker}: Sending chart image")
+                    logger.info(f"{ticker}: Sending chart image")
                     await bot.send_photo(chat_id=CHAT_ID, photo=photo)
-                    print(f"[TELEGRAM] {ticker}: Chart image sent successfully")
+                    logger.info(f"{ticker}: Chart image sent successfully")
             except Exception as e:
-                print(f"[TELEGRAM] {ticker}: Error sending chart - {str(e)}")
+                logger.error(f"{ticker}: Error sending chart - {str(e)}")
 
     try:
-        print("[TELEGRAM] Sending final message")
-        await bot.send_message(chat_id=CHAT_ID, text=message)
-        print("[TELEGRAM] Morning update sent successfully!")
+        logger.info("Sending final message")
+        await bot.send_message(chat_id=CHAT_ID, text=message.strip())
+        logger.info("Morning update sent successfully!")
     except Exception as e:
-        print(f"[TELEGRAM] Error sending message - {str(e)}")
-    print("[UPDATE] Morning update completed!")
+        logger.error(f"Error sending message - {str(e)}")
+    logger.info("Morning update completed!")
 
 # Flask 엔드포인트
 @app.route('/')
@@ -149,22 +160,22 @@ async def run_update():
     global last_run_time
     now = datetime.now(UTC) + timedelta(hours=9)  # KST
     current_time = time.time()
-    print(f"[FLASK] Request received at {now.hour}:{now.minute} KST")
+    logger.info(f"Request received at {now.hour}:{now.minute} KST")
 
     if current_time - last_run_time < 60:
-        print("[FLASK] Ignoring request: Too soon since last run")
+        logger.info("Ignoring request: Too soon since last run")
         return "Update already sent recently!"
 
     last_run_time = current_time
     try:
-        print("[FLASK] Starting update process...")
+        logger.info("Starting update process...")
         await send_morning_update()
-        print("[FLASK] Update process completed!")
+        logger.info("Update process completed!")
         return "Update sent!"
     except Exception as e:
-        print(f"[FLASK] Error in update: {str(e)}\n{traceback.format_exc()}")
+        logger.error(f"Error in update: {str(e)}\n{traceback.format_exc()}")
         return "Internal Server Error", 500
 
 if __name__ == "__main__":
-    print("[INIT] Starting Flask server...")
+    logger.info("Starting Flask server...")
     app.run(host="0.0.0.0", port=3000, debug=True)
