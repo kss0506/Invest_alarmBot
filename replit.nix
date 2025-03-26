@@ -1,5 +1,8 @@
 {pkgs}: {
   deps = [
+    pkgs.playwright-driver
+    pkgs.gitFull
+    pkgs.geckodriver
     pkgs.tk
     pkgs.tcl
     pkgs.qhull

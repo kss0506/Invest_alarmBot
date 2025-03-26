@@ -4,7 +4,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, UTC
-import requests
+from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 import os
 from flask import Flask
@@ -92,32 +92,32 @@ def create_chart(ticker):
         logger.error(f"{ticker}: Error - {str(e)}")
         return None
 
-# Zum 데일리 브리핑 가져오기
+# Zum 데일리 브리핑 가져오기 (Playwright 사용)
 def get_zum_briefing(ticker):
     logger.info(f"Fetching Zum briefing for {ticker}")
     try:
         if ticker in ["IGV", "SOXL", "IVZ", "BLK", "BRKU"]:
             url = f"https://invest.zum.com/etf/{ticker}/"
-            briefing_class = "styles_briefingInner__WBq3C"  # 주식/ETF용 클래스
+            briefing_class = "styles_briefingInner__WBq3C"
         else:
             url = f"https://invest.zum.com/stock/{ticker}/"
-            briefing_class = "styles_briefingInner__1kI5J"  # 가상화폐용 클래스
+            briefing_class = "styles_briefingInner__1kI5J"
 
-        headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get(url, headers=headers, timeout=5)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        briefing_div = soup.find("div", class_=briefing_class)
-        if briefing_div:
-            briefing = briefing_div.text.strip()
-        else:
-            logger.warning(f"{ticker}: No briefing found with class {briefing_class}, HTML sample: {str(soup)[:500]}")
-            briefing = "No daily briefing available."
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url)
+            page.wait_for_timeout(3000)  # 페이지 로드 대기
+            soup = BeautifulSoup(page.content(), "html.parser")
+            briefing_div = soup.find("div", class_=briefing_class)
+            if briefing_div:
+                briefing = briefing_div.text.strip()
+            else:
+                logger.warning(f"{ticker}: No briefing found with class {briefing_class}, HTML sample: {str(soup)[:500]}")
+                briefing = "No daily briefing available."
+            browser.close()
         logger.info(f"{ticker}: Briefing - {briefing}")
         return briefing
-    except requests.exceptions.RequestException as e:
-        logger.error(f"{ticker}: Network error - {str(e)}")
-        return "Briefing unavailable (network issue)"
     except Exception as e:
         logger.error(f"{ticker}: Error - {str(e)}")
         return "Briefing unavailable"
