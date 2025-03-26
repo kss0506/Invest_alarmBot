@@ -12,31 +12,31 @@ import asyncio
 import time
 import traceback
 
-print("\n" * 50)  # 콘솔 초기화
+print("\n" * 50)
 print("===== NEW EXECUTION START =====")
 
 app = Flask(__name__)
 
 # 환경 변수 확인
-print("Loading environment variables...")
+print("[INIT] Loading environment variables...")
 TOKEN = os.getenv("BOT_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 if TOKEN is None or CHAT_ID is None:
-    print("ERROR: BOT_TOKEN or CHAT_ID is None!")
+    print("[ERROR] BOT_TOKEN or CHAT_ID is None!")
     exit(1)
-print(f"TOKEN loaded: {TOKEN[:5]}...")
-print(f"CHAT_ID loaded: {CHAT_ID}")
+print(f"[INIT] TOKEN loaded: {TOKEN[:5]}...")
+print(f"[INIT] CHAT_ID loaded: {CHAT_ID}")
 
 # 텔레그램 봇 초기화
-print("Initializing Telegram bot...")
+print("[INIT] Initializing Telegram bot...")
 try:
     bot = telegram.Bot(token=TOKEN)
-    print("Telegram bot initialized successfully!")
+    print("[INIT] Telegram bot initialized successfully!")
 except Exception as e:
-    print(f"ERROR initializing bot: {str(e)}")
+    print(f"[ERROR] Initializing bot failed: {str(e)}")
     exit(1)
 
-print(f"Starting bot... TOKEN: {TOKEN[:5]}..., CHAT_ID: {CHAT_ID}")
+print(f"[INIT] Starting bot... TOKEN: {TOKEN[:5]}..., CHAT_ID: {CHAT_ID}")
 
 # 마지막 실행 시간 저장
 last_run_time = 0
@@ -115,7 +115,7 @@ def get_zum_briefing(ticker):
 async def send_morning_update():
     tickers = ["IGV", "SOXL", "IVZ", "BLK", "BRKU", "BTC-USD", "ETH-USD"]
     message = "🌞 Good Morning!\n\n"
-    print("===== MORNING UPDATE START =====")
+    print("[UPDATE] Starting morning update...")
 
     for ticker in tickers:
         price, change = get_asset_data(ticker)
@@ -125,4 +125,46 @@ async def send_morning_update():
         briefing = get_zum_briefing(ticker)
         message += f"{ticker}: ${price:.2f} ({change:+.2f}%)\n{briefing}\n\n"
 
-        char
+        chart_file = create_chart(ticker)
+        if chart_file:
+            try:
+                with open(chart_file, "rb") as photo:
+                    print(f"[TELEGRAM] {ticker}: Sending chart image")
+                    await bot.send_photo(chat_id=CHAT_ID, photo=photo)
+                    print(f"[TELEGRAM] {ticker}: Chart image sent successfully")
+            except Exception as e:
+                print(f"[TELEGRAM] {ticker}: Error sending chart - {str(e)}")
+
+    try:
+        print("[TELEGRAM] Sending final message")
+        await bot.send_message(chat_id=CHAT_ID, text=message)
+        print("[TELEGRAM] Morning update sent successfully!")
+    except Exception as e:
+        print(f"[TELEGRAM] Error sending message - {str(e)}")
+    print("[UPDATE] Morning update completed!")
+
+# Flask 엔드포인트
+@app.route('/')
+async def run_update():
+    global last_run_time
+    now = datetime.now(UTC) + timedelta(hours=9)  # KST
+    current_time = time.time()
+    print(f"[FLASK] Request received at {now.hour}:{now.minute} KST")
+
+    if current_time - last_run_time < 60:
+        print("[FLASK] Ignoring request: Too soon since last run")
+        return "Update already sent recently!"
+
+    last_run_time = current_time
+    try:
+        print("[FLASK] Starting update process...")
+        await send_morning_update()
+        print("[FLASK] Update process completed!")
+        return "Update sent!"
+    except Exception as e:
+        print(f"[FLASK] Error in update: {str(e)}\n{traceback.format_exc()}")
+        return "Internal Server Error", 500
+
+if __name__ == "__main__":
+    print("[INIT] Starting Flask server...")
+    app.run(host="0.0.0.0", port=3000, debug=True)
